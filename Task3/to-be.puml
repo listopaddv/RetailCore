@@ -1,0 +1,78 @@
+@startuml to-be-c1
+!include <C4/C4_Context>
+
+LAYOUT_LEFT_RIGHT()
+title RetailCore TO-BE: первый этап, C4 System Context (C1)
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam nodesep 45
+skinparam ranksep 60
+skinparam noteBackgroundColor #ECF7ED
+skinparam noteBorderColor #4F8956
+
+AddRelTag("preserved", $lineColor="#78838D", $textColor="#59636C", $legendText="Существующая связь сохраняется")
+AddRelTag("changed", $lineColor="#287D42", $textColor="#226D39", $legendText="Изменение первого этапа")
+AddRelTag("unverified", $lineColor="#B98225", $textColor="#805B20", $lineStyle=DashedLine(), $legendText="Путь требует уточнения")
+AddElementTag("unverified", $bgColor="#FFF6DE", $fontColor="#252525", $borderColor="#B98225", $legendText="Принадлежность платформе уточняется")
+
+Person(customer, "Клиент", "Оформляет заказ и отслеживает результат")
+Person(support, "Оператор поддержки", "Разбирает исключения и выполняет ручные действия")
+Person(business, "Бизнес-пользователь", "Анализирует заказы и продажи")
+
+System(retailcore, "RetailCore", "Платформа заказов, оплаты и доставки. Первый этап отделяет пилотное чтение и изолирует выбранный партнёрский поток")
+
+System_Ext(marketplaces, "Маркетплейсы", "Заказы и обновления")
+System_Ext(payments, "Платёжные провайдеры", "Оплата и платёжные сессии")
+System_Ext(delivery, "Службы доставки", "Заявки, подтверждения и статусы")
+System_Ext(warehouses, "Складские системы", "Резерв и складские операции")
+System_Ext(bi, "BI и отчёты", "Внутренняя система компании вне границы RetailCore")
+
+Boundary(unknown, "Принадлежность платформе уточняется") {
+  System_Ext(promo, "Промо-сервис", "Расчёт скидки", $tags="unverified")
+  System_Ext(inventory, "Сервис наличия", "Проверка доступности товаров", $tags="unverified")
+}
+
+Rel(customer, retailcore, "Оформляет заказ и смотрит статус", $tags="preserved")
+Rel(marketplaces, retailcore, "Передают заказы и обновления", $tags="preserved")
+Rel(support, retailcore, "Читает новую историю пилотных заказов. Ручные действия остаются в прежнем контуре", $tags="changed")
+Rel(business, bi, "Просматривает отчёты", $tags="preserved")
+Rel(bi, retailcore, "Получает данные пилотного отчёта из отдельного контура чтения", $tags="changed")
+
+Rel(retailcore, payments, "Создаёт платёжную сессию", $tags="preserved")
+Rel(retailcore, delivery, "Резервирует доставку и передаёт заявки", $tags="preserved")
+Rel(delivery, retailcore, "Передают статусы пилотного партнёра через изолированный адаптер", $tags="changed")
+Rel(retailcore, warehouses, "Участвует в резервировании. Точный путь нужно проверить", $tags="unverified")
+Rel(retailcore, promo, "Рассчитывает скидку", $tags="preserved")
+Rel(retailcore, inventory, "Проверяет наличие", $tags="preserved")
+
+note top of retailcore #F2F4F6
+  Сохраняются внутри RetailCore:
+  монолит, операционная Oracle, создание заказа,
+  расчёт цены, оплата и первичный резерв доставки.
+  Правила и контракты оформления сохраняются.
+end note
+
+note bottom of retailcore
+  Первые изменения внутри RetailCore:
+  сервис истории и отдельное хранилище,
+  данные пилотного отчёта вне рабочей Oracle,
+  надёжная передача изменений заказа,
+  адаптер статусов в существующем .NET-сервисе.
+  Новые части чтения не меняют заказ.
+end note
+
+note bottom of bi #F2F4F6
+  Остальные отчёты временно сохраняют
+  прежние источники, включая Oracle.
+end note
+
+note bottom of delivery
+  Меняется только выбранный поток статусов.
+  Бизнес-переход выполняет прежний обработчик.
+  Остальные партнёры работают по старой схеме.
+end note
+
+SHOW_LEGEND()
+@enduml

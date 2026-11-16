@@ -1,0 +1,94 @@
+@startuml as-is-c2
+!include <C4/C4_Container>
+
+LAYOUT_LEFT_RIGHT()
+title RetailCore AS-IS: C4 Container (C2)
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam nodesep 40
+skinparam ranksep 55
+skinparam noteBackgroundColor #FFF4D6
+skinparam noteBorderColor #C68A32
+
+AddElementTag("risk", $borderColor="#C4513F", $legendText="Проблемная зона")
+AddElementTag("unverified", $bgColor="#FFF6DE", $fontColor="#252525", $borderColor="#B98225", $legendText="Граница требует уточнения")
+AddRelTag("unverified", $lineColor="#B98225", $textColor="#805B20", $lineStyle=DashedLine(), $legendText="Путь интеграции уточняется")
+
+Person(customer, "Клиент", "Оформляет заказ и отслеживает результат")
+Person(support, "Оператор поддержки", "Разбирает отклонения и выполняет ручные действия")
+Person(business, "Бизнес-пользователь", "Анализирует заказы и продажи")
+
+System_Ext(marketplaces, "Маркетплейсы", "Передают заказы и обновления")
+System_Ext(payments, "Платёжные провайдеры", "Создают платёжные сессии и обрабатывают оплату")
+System_Ext(delivery, "Службы доставки", "Принимают заявки и подтверждают доставку")
+System_Ext(warehouses, "Складские системы", "Резерв и складские операции")
+System_Ext(bi, "BI и отчёты", "Внутри компании, вне границы платформы")
+
+Boundary(unknown, "Принадлежность платформе уточняется") {
+  System_Ext(promo, "Промо-сервис", "Расчёт скидки, используется не всегда", $tags="unverified")
+  System_Ext(inventory, "Сервис наличия", "Проверка наличия по интервью техлида", $tags="unverified")
+}
+
+System_Boundary(retailcore, "RetailCore") {
+  Container(web, "Интернет-магазин", "Технология не указана", "Оформление заказа и просмотр статуса")
+  Container(mobile, "Мобильный клиент", "Технология не указана", "Мобильные каналы продаж. Состав приложений уточняется", $tags="unverified")
+  Container(admin, "Инструменты поддержки", "Технология не указана", "Проверка заказа и ручные корректировки. Граница приложения уточняется", $tags="unverified")
+  Container(monolith, "Монолитное ядро", "Java", "Order API, обработка заказа, цена, промо, статусы, платежи и доставка", $tags="risk")
+  ContainerDb(oracle, "Операционная БД", "Oracle", "Заказы, история, правила, процедуры и интеграционные таблицы", $tags="risk")
+  ContainerQueue(queues, "Очереди обмена", "Технология не указана", "Асинхронные задания и выгрузки. Состав очередей уточняется")
+  Container(dotnet, "Партнёрские интеграции", ".NET", "Обмен с логистическими партнёрами и общими таблицами Oracle")
+  Container(analytics, "Задания аналитики", "Python", "Выгрузки и отчётность. Источники: SQL, staging, API и CSV", $tags="risk")
+}
+
+Rel(customer, web, "Оформляет заказ и смотрит статус")
+Rel(customer, mobile, "Оформляет заказ и смотрит статус")
+Rel(support, admin, "Проверяет и корректирует заказ")
+Rel(business, bi, "Просматривает отчёты")
+Rel(web, monolith, "Создаёт и обновляет заказ", "Синхронно")
+Rel(mobile, monolith, "Обращается к заказному контуру", "Способ уточняется")
+Rel(marketplaces, monolith, "Передают заказы и обновления", "Протокол не указан")
+Rel(admin, monolith, "Проверяет и меняет статус", "Способ уточняется")
+Rel(admin, oracle, "Читает технические атрибуты", "Способ доступа уточняется")
+
+Rel(monolith, oracle, "Читает и пишет заказы, правила, staging и повторы", "SQL")
+Rel(monolith, queues, "Передаёт события и задания", "Асинхронно")
+Rel(queues, dotnet, "Передают данные части партнёрских сценариев", "Асинхронно")
+Rel(queues, analytics, "Передают данные для выгрузок", "Асинхронно")
+Rel(dotnet, oracle, "Читает и пишет общие staging-таблицы", "Обмен через БД")
+Rel(analytics, oracle, "Выполняет тяжёлые выборки", "SQL")
+Rel(bi, oracle, "Выполняет отчётные запросы", "SQL")
+
+Rel(monolith, promo, "Рассчитывает скидку", "Синхронно")
+Rel(monolith, inventory, "Проверяет наличие", "Синхронно по интервью")
+Rel(monolith, payments, "Создаёт платёжную сессию", "Синхронно")
+Rel(monolith, delivery, "Резервирует слот", "Синхронно в коде")
+Rel(dotnet, delivery, "Передаёт заявки партнёрам", "Способ зависит от партнёра")
+Rel(monolith, warehouses, "Участвует в резервировании", "Точный путь неизвестен", $tags="unverified")
+
+note bottom of monolith
+  Правила распределены между Java, настройками и Oracle.
+  Статусы меняются также в batch и вручную.
+  Границы запуска фоновых заданий не установлены.
+end note
+
+note bottom of oracle
+  Операции и отчёты используют одну БД.
+  Вынесенные сервисы зависят от общих таблиц.
+  Есть длинные транзакции по интервью техлида.
+end note
+
+note bottom of queues
+  Очереди показаны укрупнённо.
+  Единого потока бизнес-событий нет.
+  Повторы также используют таблицы и batch.
+end note
+
+note bottom of delivery
+  Задержки подтверждений могут приводить
+  к повторам и дублям логистических заявок.
+end note
+
+SHOW_LEGEND()
+@enduml
